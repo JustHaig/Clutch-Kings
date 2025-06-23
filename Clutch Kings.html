@@ -181,7 +181,7 @@
 <main>
   <h1>Clutch Kings</h1>
   <section id="instructions" aria-live="polite" tabindex="0">
-    Press the <strong>spacebar</strong> to shift gears when your dot is centered on a checkpoint circle.<br>
+    Press the <strong>Shift key</strong> to shift gears when your dot is centered on a checkpoint circle.<br>
     Time your shifts well for a speed boost. Missing a shift gives a slowdown, but you can recover.<br>
     <u>New:</u> Press <kbd>P</kbd> to pause/resume. Press <kbd>R</kbd> to restart.<br>
     The leaderboard tracks your best times and win streaks!
@@ -352,7 +352,7 @@
     }
   }
 
-  // --- Key Handling: Space (shift), P (pause), R (restart) ---
+  // --- Key Handling: Shift (shift), P (pause), R (restart) ---
   let lastKeyPress = 0;
   function handleKeyPress(e) {
     if (raceEnded) return;
@@ -377,8 +377,8 @@
       startGame();
       return;
     }
-    // Space = shift (debounced)
-    if ((e.code === "Space" || e.key === " ") && !paused && Date.now() - lastKeyPress > 180) {
+    // Shift key = shift (debounced)
+    if ((e.key === "Shift" || e.code === "ShiftLeft" || e.code === "ShiftRight") && !paused && Date.now() - lastKeyPress > 180) {
       lastKeyPress = Date.now();
       const i = 0; // User = player 1
       const left = parseFloat(playerDots[i].style.left || 0);
