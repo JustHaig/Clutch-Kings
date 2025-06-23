@@ -69,7 +69,7 @@
     #gameArea {
       margin-top: 30px;
       position: relative;
-      height: 540px;
+      height: 420px;
       width: 1200px;
       max-width: 98vw;
       overflow: hidden;
@@ -106,19 +106,19 @@
     }
     .finish-line {
       position: absolute;
-      width: 5px;
-      height: 100px;
+      width: 7px;
+      height: 380px;
       background: #fff;
       z-index: 2;
       left: 1140px;
-      top: 170px;
+      top: 20px;
       border-radius: 2px;
       box-shadow: 0 0 7px #fff8;
     }
-    .oval-track-svg {
+    .flat-track-svg {
       position: absolute;
       left: 0; top: 0;
-      width: 1200px; height: 540px;
+      width: 1200px; height: 420px;
       z-index: 0;
       pointer-events: none;
     }
@@ -163,11 +163,11 @@
       100% { opacity: 0; }
     }
     @media (max-width: 1300px) {
-      #gameArea, .oval-track-svg { width: 99vw !important; }
+      #gameArea, .flat-track-svg { width: 99vw !important; }
     }
     @media (max-width: 700px) {
       #gameArea { height: 180px; width: 100vw !important;}
-      .oval-track-svg { height: 180px !important; width: 99vw !important; }
+      .flat-track-svg { height: 180px !important; width: 99vw !important; }
       .dot { width: 12px; height: 12px; }
       .checkpoint-circle { width: 9px; height: 9px; }
       #instructions { font-size: 13px; }
@@ -207,19 +207,16 @@
 </main>
 <script defer>
   // --- Constants & Globals ---
+  const TRACK_LEFT = 30;
+  const TRACK_RIGHT = 1140;
+  const TRACK_TOP = 60;
   const TRACK_HEIGHT = 60;
   const DOT_SIZE = 20;
   const TOTAL_CHECKPOINTS = 5;
   const TOTAL_PLAYERS = 6;
-  const CPU_ACCURACY_BASE = [8, 9, 10, 11, 12, 13];
+  const CPU_ACCURACY_BASE = [0.027, 0.035, 0.043, 0.050, 0.060, 0.070]; // for linear track
   const colors = ["red", "blue", "green", "yellow", "orange", "purple"];
   let winStreak = 0, bestTime = null, ghostDot = null, paused = false;
-
-  // Oval track parameters
-  const OVAL_CENTER_X = 600;
-  const OVAL_CENTER_Y = 270;
-  const OVAL_A = 470;
-  const OVAL_B = 170;
 
   // Game state
   let playerDots = [],
@@ -227,12 +224,11 @@
       intervals = [],
       shifts = [],
       checkpoints = [],
-      checkpointAngles = [],
       leaderboard = [],
       cpuAccuracy = [],
       perfectStreak = [],
       shiftLabels = [],
-      angles = [],
+      progress = [],
       startTime, raceEnded = false,
       difficultyMultiplier = 1,
       pauseIntervals = [],
@@ -255,27 +251,23 @@
     else difficultyMultiplier = 1.4;
   }
 
-  // --- Checkpoints ---
+  // --- Checkpoints: random progress values between 0.08 and 0.92 (sorted) ---
   function generateRandomCheckpoints() {
     checkpoints = [];
-    checkpointAngles = [];
-    let spacing = (2 * Math.PI) / (TOTAL_CHECKPOINTS + 1);
-    let angle = spacing; // Start a bit after 0
     for (let i = 0; i < TOTAL_CHECKPOINTS; i++) {
-      checkpoints.push(angle); // Store angle, not pixel
-      checkpointAngles.push(angle);
-      angle += spacing;
+      checkpoints.push(Math.random() * 0.84 + 0.08);
     }
+    checkpoints.sort((a, b) => a - b);
   }
 
+  // --- Drawing Functions ---
   function drawCheckpointCircles() {
     const gameArea = document.getElementById("gameArea");
-    // Remove old checkpoints
     Array.from(gameArea.querySelectorAll('.checkpoint-circle')).forEach(e => e.remove());
     for (let i = 0; i < TOTAL_PLAYERS; i++) {
-      checkpointAngles.forEach(a => {
-        const x = OVAL_CENTER_X + OVAL_A * Math.cos(a);
-        const y = OVAL_CENTER_Y + (i - 2.5) * TRACK_HEIGHT + OVAL_B * Math.sin(a);
+      checkpoints.forEach(progress => {
+        const x = TRACK_LEFT + progress * (TRACK_RIGHT - TRACK_LEFT);
+        const y = TRACK_TOP + i * TRACK_HEIGHT;
         const circle = document.createElement("div");
         circle.className = "checkpoint-circle";
         circle.style.left = `${x}px`;
@@ -286,25 +278,25 @@
     }
   }
 
-  function drawOvalTrack() {
-    let svg = document.querySelector('.oval-track-svg');
+  function drawFlatTrack() {
+    let svg = document.querySelector('.flat-track-svg');
     if (svg) svg.remove();
-    const width = 1200, height = 540;
+    const width = 1200, height = 420;
     const svgNS = "http://www.w3.org/2000/svg";
     svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("class", "oval-track-svg");
+    svg.setAttribute("class", "flat-track-svg");
     svg.setAttribute("width", width);
     svg.setAttribute("height", height);
     for (let i = 0; i < TOTAL_PLAYERS; i++) {
-      const track = document.createElementNS(svgNS, "ellipse");
-      track.setAttribute("cx", OVAL_CENTER_X);
-      track.setAttribute("cy", OVAL_CENTER_Y + (i - 2.5) * TRACK_HEIGHT);
-      track.setAttribute("rx", OVAL_A);
-      track.setAttribute("ry", OVAL_B);
-      track.setAttribute("fill", "none");
-      track.setAttribute("stroke", "#444");
-      track.setAttribute("stroke-width", "12");
-      svg.appendChild(track);
+      const y = TRACK_TOP + i * TRACK_HEIGHT;
+      const line = document.createElementNS(svgNS, "line");
+      line.setAttribute("x1", TRACK_LEFT);
+      line.setAttribute("y1", y);
+      line.setAttribute("x2", TRACK_RIGHT);
+      line.setAttribute("y2", y);
+      line.setAttribute("stroke", "#444");
+      line.setAttribute("stroke-width", "8");
+      svg.appendChild(line);
     }
     document.getElementById("gameArea").appendChild(svg);
   }
@@ -313,18 +305,12 @@
     const gameArea = document.getElementById("gameArea");
     let finish = document.querySelector('.finish-line');
     if (finish) finish.remove();
-    // Draw finish line at angle 0
-    for (let i = 0; i < TOTAL_PLAYERS; i++) {
-      const x = OVAL_CENTER_X + OVAL_A * Math.cos(0);
-      const y = OVAL_CENTER_Y + (i - 2.5) * TRACK_HEIGHT + OVAL_B * Math.sin(0);
-      if (i === 0) {
-        finish = document.createElement('div');
-        finish.className = 'finish-line';
-        finish.style.left = `${x-2.5}px`;
-        finish.style.top = `${y-50}px`;
-        gameArea.appendChild(finish);
-      }
-    }
+    finish = document.createElement('div');
+    finish.className = 'finish-line';
+    finish.style.left = `${TRACK_RIGHT-2.5}px`;
+    finish.style.top = `20px`;
+    finish.style.height = `${TRACK_HEIGHT * TOTAL_PLAYERS + 20}px`;
+    gameArea.appendChild(finish);
   }
 
   // --- Game Start ---
@@ -333,11 +319,11 @@
     clearIntervalAll();
     clearGhostInterval();
     playerDots = []; speeds = []; intervals = []; shifts = []; cpuAccuracy = []; perfectStreak = []; shiftLabels = [];
-    angles = [];
+    progress = [];
     for (let i = 0; i < TOTAL_PLAYERS; i++) {
       speeds.push(1); shifts.push(0); perfectStreak.push(0);
-      cpuAccuracy.push(i === 0 ? CPU_ACCURACY_BASE[0] : CPU_ACCURACY_BASE[i] + Math.floor(Math.random() * 6));
-      angles.push(0);
+      cpuAccuracy.push(i === 0 ? CPU_ACCURACY_BASE[0] : CPU_ACCURACY_BASE[i] + Math.random() * 0.04);
+      progress.push(0);
     }
     raceEnded = false;
     document.getElementById("leaderboard").style.display = "none";
@@ -351,14 +337,13 @@
     gameArea.setAttribute('tabindex', '0');
     gameArea.focus();
 
-    drawOvalTrack();
+    drawFlatTrack();
     drawFinishLine();
 
     // Add tracks and dots
     for (let i = 0; i < TOTAL_PLAYERS; i++) {
-      const angle = 0;
-      const x = OVAL_CENTER_X + OVAL_A * Math.cos(angle);
-      const y = OVAL_CENTER_Y + (i - 2.5) * TRACK_HEIGHT + OVAL_B * Math.sin(angle);
+      const x = TRACK_LEFT;
+      const y = TRACK_TOP + i * TRACK_HEIGHT;
       const dot = document.createElement("div");
       dot.classList.add("dot", colors[i % colors.length]);
       dot.style.left = `${x}px`;
@@ -430,10 +415,9 @@
     if ((e.code === "Space" || e.key === " ") && !paused && Date.now() - lastKeyPress > 180) {
       lastKeyPress = Date.now();
       const i = 0; // User = player 1
-      const angle = angles[i];
       if (shifts[i] < TOTAL_CHECKPOINTS) {
-        const dist = Math.abs(angleDistance(angle, checkpointAngles[shifts[i]]));
-        if (dist < 0.09) {
+        const dist = Math.abs(progress[i] - checkpoints[shifts[i]]);
+        if (dist < 0.03) {
           perfectStreak[i]++;
           speeds[i] += 1.5 * difficultyMultiplier + 0.1 * perfectStreak[i];
           playerDots[i].style.filter = "blur(2px) brightness(1.4)";
@@ -443,7 +427,7 @@
           setTimeout(() => shiftLabels[i].textContent = "", 650);
           playSound('perfect');
           shifts[i]++;
-        } else if (dist < 0.16) {
+        } else if (dist < 0.07) {
           perfectStreak[i] = 0;
           speeds[i] += 0.5 * difficultyMultiplier;
           playerDots[i].style.filter = "";
@@ -466,47 +450,32 @@
     }
   }
 
-  // --- Oval Math ---
-  function angleDistance(a1, a2) {
-    let diff = a1 - a2;
-    while (diff > Math.PI) diff -= 2 * Math.PI;
-    while (diff < -Math.PI) diff += 2 * Math.PI;
-    return diff;
-  }
-
-  // --- Dot Movement ---
+  // --- Dot Movement (linear) ---
   function moveDot(i) {
     if (paused || raceEnded) return;
     const dot = playerDots[i];
-    let angle = angles[i];
-
-    // Move angle forward based on speed
-    angle += speeds[i] * (Math.PI * 2 / 1200);
-    angles[i] = angle;
-
-    // Oval position
-    const x = OVAL_CENTER_X + OVAL_A * Math.cos(angle);
-    const y = OVAL_CENTER_Y + (i - 2.5) * TRACK_HEIGHT + OVAL_B * Math.sin(angle);
-
+    // Move progress forward based on speed
+    progress[i] += speeds[i] * 0.0012 * difficultyMultiplier; // adjust step as needed
+    if (progress[i] > 1) progress[i] = 1;
+    // Linear position
+    const x = TRACK_LEFT + progress[i] * (TRACK_RIGHT - TRACK_LEFT);
+    const y = TRACK_TOP + i * TRACK_HEIGHT;
     dot.style.left = `${x}px`;
     dot.style.top = `${y}px`;
-
     shiftLabels[i].style.left = `${x}px`;
     shiftLabels[i].style.top = `${y - 10}px`;
-
     // CPU shifting for AI
     if (i !== 0 && shifts[i] < TOTAL_CHECKPOINTS) {
-      const checkpointAngle = checkpointAngles[shifts[i]];
-      const diff = Math.abs(angleDistance(angle, checkpointAngle));
-      if (diff < cpuAccuracy[i] * 0.008) {
+      const checkpoint = checkpoints[shifts[i]];
+      const diff = Math.abs(progress[i] - checkpoint);
+      if (diff < cpuAccuracy[i]) {
         speeds[i] += 1.5 * difficultyMultiplier;
         flashDot(dot);
         shifts[i]++;
       }
     }
-
-    // Finish line: one full lap is 2*PI radians
-    if (angle >= 2 * Math.PI && !raceEnded) {
+    // Finish line
+    if (progress[i] >= 1 && !raceEnded) {
       raceEnded = true;
       clearIntervalAll();
       clearGhostInterval();
@@ -575,13 +544,12 @@
     ghostInterval = setInterval(() => {
       if (paused) return;
       const now = Date.now();
-      const progress = (now - start) / totalDuration;
-      const angle = progress * 2 * Math.PI;
-      const x = OVAL_CENTER_X + OVAL_A * Math.cos(angle);
-      const y = OVAL_CENTER_Y - 2.5 * TRACK_HEIGHT + OVAL_B * Math.sin(angle);
+      const prog = Math.min((now - start) / totalDuration, 1);
+      const x = TRACK_LEFT + prog * (TRACK_RIGHT - TRACK_LEFT);
+      const y = TRACK_TOP;
       ghost.style.left = `${x}px`;
       ghost.style.top = `${y}px`;
-      if (progress >= 1) {
+      if (prog >= 1) {
         clearGhostInterval();
       }
     }, 16);
