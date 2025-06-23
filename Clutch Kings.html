@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clutch Kings</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #111; color: #fff; }
+    #gameArea { margin-top: 30px; position: relative; height: 440px; overflow: hidden; border-top: 2px solid #444; border-bottom: 2px solid #444; }
+    .dot {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      transition: filter 0.3s;
+    }
+    .red { background: red; }
+    .blue { background: blue; }
+    .green { background: green; }
+    .yellow { background: yellow; }
+    .orange { background: orange; }
+    .purple { background: purple; }
+    .track {
+      position: relative;
+      height: 60px;
+      margin: 5px 0;
+      display: flex;
+      align-items: center;
+      border-top: 1px dashed #555;
+      border-bottom: 1px dashed #555;
+    }
+    .checkpoint-circle {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background-color: #ccc;
+      position: absolute;
+      top: 23px;
+      z-index: 1;
+    }
+    #countdown { font-size: 2em; margin-top: 20px; }
+    #leaderboard { margin-top: 10px; font-size: 14px; display: none; }
+    #instructions { font-size: 14px; margin: 10px auto; width: 80%; line-height: 1.5; color: #ccc; }
+    select, button { margin: 10px; padding: 5px 10px; font-size: 16px; }
+  .finish-line {
+      position: absolute;
+      top: 0;
+      left: 1000px;
+      width: 4px;
+      height: 100%;
+      background: #fff;
+      z-index: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Clutch Kings</h1>
+  <div id="instructions">
+    Press the <strong>spacebar</strong> to shift gears when your dot is centered on a checkpoint circle. Time your shifts well for a speed boost. Missing a shift gives a small slowdown, but you can still recover. First to the finish wins!
+  </div>
+  <div>
+    
+    <label for="difficulty">Difficulty:</label>
+    <select id="difficulty">
+      <option value="very_easy">Very Easy</option>
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+      <option value="very_hard">Very Hard</option>
+    </select>
+    <button id="startButton">Start Race</button>
+  </div>
+  <div id="countdown"></div>
+  <div id="gameArea"></div>
+  <div id="leaderboard"></div>
+<div id="fastestTimeDisplay" style="margin-top: 5px; font-size: 14px; color: #ccc;"></div>
+  <div id="streakDisplay" style="margin-top: 5px; font-size: 14px; color: #ccc;"></div>
+
+  <script>
+    let colors = ["red", "blue", "green", "yellow", "orange", "purple"];
+    let winStreak = 0;
+    let bestTime = null;
+    let ghostDot = null;
+    let playerDots = [], speeds = [], intervals = [], shifts = [], checkpoints = [], leaderboard = [], cpuAccuracy = [], perfectStreak = [], shiftLabels = [];
+    let startTime, raceEnded = false;
+    let finishLine = 1000;
+    let difficultyMultiplier = 1;
+    const totalCheckpoints = 5;
+    const totalPlayers = 6;
+
+    document.getElementById("startButton").addEventListener("click", startGame);
+
+    function setDifficulty() {
+      const diff = document.getElementById("difficulty").value;
+      if (diff === "very_easy") difficultyMultiplier = 0.6;
+      else if (diff === "easy") difficultyMultiplier = 0.8;
+      else if (diff === "medium") difficultyMultiplier = 1.0;
+      else if (diff === "hard") difficultyMultiplier = 1.2;
+      else difficultyMultiplier = 1.4;
+    }
+
+    function generateRandomCheckpoints() {
+      checkpoints = [];
+      let spacing = Math.floor((finishLine - 200) / totalCheckpoints);
+      let last = 100;
+      for (let i = 0; i < totalCheckpoints; i++) {
+        last += spacing;
+        checkpoints.push(last);
+      }
+    }
+
+    function drawCheckpointCircles() {
+      const gameArea = document.getElementById("gameArea");
+      checkpoints.forEach(pos => {
+        for (let i = 0; i < totalPlayers; i++) {
+          const circle = document.createElement("div");
+          circle.className = "checkpoint-circle";
+          circle.style.left = `${pos}px`;
+          circle.style.top = `${i * 60 + 23}px`;
+          gameArea.appendChild(circle);
+        }
+      });
+    }
+
+    function startGame() {
+      if (ghostDot) ghostDot.remove();
+      clearIntervalAll();
+      playerDots = []; speeds = []; intervals = []; shifts = []; cpuAccuracy = [];
+      for (let i = 0; i < totalPlayers; i++) {
+        speeds.push(1); shifts.push(0); perfectStreak.push(0);
+        cpuAccuracy.push(i === 0 ? 8 : 9 + Math.floor(Math.random() * 6));
+      }
+      raceEnded = false;
+      document.getElementById("leaderboard").style.display = "none";
+      generateRandomCheckpoints();
+      if (bestTime) createGhostDot();
+      setDifficulty();
+
+      const gameArea = document.getElementById("gameArea");
+      gameArea.innerHTML = "";
+      const finishLineDiv = document.createElement("div");
+      finishLineDiv.className = "finish-line";
+      gameArea.appendChild(finishLineDiv);
+
+      for (let i = 0; i < totalPlayers; i++) {
+        const track = document.createElement("div");
+        track.className = "track";
+        gameArea.appendChild(track);
+        const dot = document.createElement("div");
+        dot.classList.add("dot", colors[i % colors.length]);
+        dot.style.top = `${i * 60}px`;
+        dot.style.left = "0px";
+        dot.style.zIndex = 10;
+        gameArea.appendChild(dot);
+        playerDots.push(dot);
+        const label = document.createElement("div");
+        label.style.position = "absolute";
+        label.style.top = `${i * 60 - 10}px`;
+        label.style.left = "0px";
+        label.style.color = "#0f0";
+        label.style.fontSize = "12px";
+        label.style.zIndex = 11;
+        gameArea.appendChild(label);
+        shiftLabels.push(label);
+      }
+
+      drawCheckpointCircles();
+
+      let countdown = 3;
+      document.getElementById("countdown").textContent = countdown;
+      const countdownInterval = setInterval(() => {
+        countdown--;
+        if (countdown === 0) {
+          clearInterval(countdownInterval);
+          document.getElementById("countdown").textContent = "Go!";
+          setTimeout(() => document.getElementById("countdown").textContent = "", 1000);
+          startRace();
+        } else {
+          document.getElementById("countdown").textContent = countdown;
+        }
+      }, 1000);
+    }
+
+    function startRace() {
+      startTime = Date.now();
+      document.addEventListener("keydown", handleKeyPress);
+      for (let i = 0; i < totalPlayers; i++) {
+        intervals.push(setInterval(() => moveDot(i), 50));
+      }
+    }
+
+    function handleKeyPress(e) {
+      if (e.code === "Space") {
+        const i = 0;
+        const left = parseFloat(playerDots[i].style.left);
+        if (shifts[i] < totalCheckpoints) {
+          const dist = Math.abs(left - checkpoints[shifts[i]]);
+          if (dist < cpuAccuracy[i]) {
+          perfectStreak[i]++;
+          speeds[i] += 1.5 * difficultyMultiplier + 0.1 * perfectStreak[i];
+            playerDots[i].style.filter = "blur(2px)";
+            flashDot(playerDots[i]);
+            playerDots[i].style.filter = "brightness(1.4)";
+            shiftLabels[i].textContent = "Perfect!";
+            setTimeout(() => shiftLabels[i].textContent = "", 500);
+            shiftLabels[i].textContent = "Okay";
+            setTimeout(() => shiftLabels[i].textContent = "", 300);
+            shifts[i]++;
+          } else if (dist < 2 * cpuAccuracy[i]) {
+          perfectStreak[i] = 0;
+          speeds[i] += 0.5 * difficultyMultiplier;
+            playerDots[i].style.filter = "";
+            shifts[i]++;
+          } else {
+          perfectStreak[i] = 0;
+          playerDots[i].style.filter = "";
+          shiftLabels[i].textContent = "";
+          }
+        }
+      }
+    }
+
+    function moveDot(i) {
+      const dot = playerDots[i];
+      let left = parseFloat(dot.style.left || 0);
+      if (i !== 0 && shifts[i] < totalCheckpoints) {
+        const diff = Math.abs(left - checkpoints[shifts[i]]);
+        if (diff < cpuAccuracy[i]) {
+          speeds[i] += 1.5 * difficultyMultiplier;
+          flashDot(dot);
+          shifts[i]++;
+        }
+      }
+      left += speeds[i];
+      dot.style.left = `${left}px`;
+      if (left >= finishLine && !raceEnded) {
+        raceEnded = true;
+        clearIntervalAll();
+        const time = ((Date.now() - startTime) / 1000).toFixed(2);
+        const winner = colors[i % colors.length];
+        alert(`Player ${i + 1} (${winner}) wins in ${time}s!`);
+        updateLeaderboard(winner, time);
+      }
+    }
+
+    function clearIntervalAll() {
+      intervals.forEach(clearInterval);
+    }
+
+    function updateLeaderboard(player, time) {
+      if (player === colors[0]) {
+        if (!bestTime || parseFloat(time) < bestTime) bestTime = parseFloat(time);
+        document.getElementById("fastestTimeDisplay").textContent = `⏱ Fastest Time Ever: ${bestTime}s`;
+      }
+      leaderboard.push({ player, time });
+      leaderboard.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+
+      let output = '<strong>Race Results:</strong><br>';
+      leaderboard.slice(0, 6).forEach((entry, idx) => {
+        output += `${idx + 1}. ${entry.player} - ${entry.time}s<br>`;
+      });
+
+      output += '<br><strong>Perfect Shifts:</strong><br>';
+      for (let i = 0; i < totalPlayers; i++) {
+        output += `Player ${i + 1} (${colors[i % colors.length]}): ${shifts[i]} / ${totalCheckpoints}<br>`;
+      }
+
+      if (player === colors[0]) {
+        winStreak++;
+      } else {
+        winStreak = 0;
+      }
+
+      const lb = document.getElementById("leaderboard");
+      lb.innerHTML = output;
+      lb.style.display = "block";
+      document.getElementById("streakDisplay").textContent = `🏆 Win Streak: ${winStreak}`;
+    }
+
+    function createGhostDot() {
+      const ghost = document.createElement("div");
+      ghost.className = "dot";
+      ghost.style.background = "rgba(255,255,255,0.4)";
+      ghost.style.top = "0px";
+      ghost.style.left = "0px";
+      ghost.style.zIndex = 1;
+      document.getElementById("gameArea").appendChild(ghost);
+      ghostDot = ghost;
+
+      const totalDuration = bestTime * 1000;
+      const start = Date.now();
+      const ghostInterval = setInterval(() => {
+        const now = Date.now();
+        const progress = (now - start) / totalDuration;
+        if (progress >= 1) {
+          ghost.style.left = `${finishLine}px`;
+          clearInterval(ghostInterval);
+        } else {
+          ghost.style.left = `${progress * finishLine}px`;
+        }
+      }, 16);
+    }
+
+    function flashDot(dot) {
+      dot.style.boxShadow = "0 0 20px 5px white";
+      setTimeout(() => {
+        dot.style.boxShadow = "none";
+      }, 150);
+    }
+  </script>
+</body>
+</html>
