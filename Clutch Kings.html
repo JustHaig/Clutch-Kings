@@ -5,14 +5,88 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Clutch Kings</title>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #111; color: #fff; }
-    #gameArea { margin-top: 30px; position: relative; height: 440px; overflow: hidden; border-top: 2px solid #444; border-bottom: 2px solid #444; }
+    :root {
+      --track-height: 60px;
+      --dot-size: 20px;
+      --finish-line: 1000px;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background: #111;
+      color: #eee;
+      height: 100%;
+      width: 100%;
+      min-height: 100vh;
+    }
+    main {
+      width: 100vw;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    h1 {
+      margin-top: 24px;
+      margin-bottom: 12px;
+    }
+    #instructions {
+      font-size: 1rem;
+      margin: 10px auto;
+      width: 80%;
+      line-height: 1.5;
+      color: #e0e0e0;
+      background: #181818;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    label, select, button {
+      font-size: 16px;
+      margin: 10px 4px;
+      padding: 5px 10px;
+    }
+    #countdown {
+      font-size: 2em;
+      margin-top: 20px;
+    }
+    #leaderboard {
+      margin-top: 10px;
+      font-size: 14px;
+      display: none;
+      background: #232323;
+      border-radius: 8px;
+      padding: 10px 16px;
+      color: #fff;
+      max-width: 350px;
+      word-break: break-all;
+    }
+    #fastestTimeDisplay, #streakDisplay {
+      margin-top: 5px;
+      font-size: 14px;
+      color: #ccc;
+    }
+    #gameArea {
+      margin-top: 30px;
+      position: relative;
+      height: calc(var(--track-height) * 6 + 10px);
+      min-width: 100%;
+      max-width: 100vw;
+      overflow-x: auto;
+      border-top: 2px solid #444;
+      border-bottom: 2px solid #444;
+      background: #131313;
+      outline: none;
+    }
     .dot {
       position: absolute;
-      width: 20px;
-      height: 20px;
+      width: var(--dot-size);
+      height: var(--dot-size);
       border-radius: 50%;
-      transition: filter 0.3s;
+      transition: filter 0.3s, box-shadow 0.2s;
+      box-shadow: none;
+      outline: none;
     }
     .red { background: red; }
     .blue { background: blue; }
@@ -22,12 +96,13 @@
     .purple { background: purple; }
     .track {
       position: relative;
-      height: 60px;
+      height: var(--track-height);
       margin: 5px 0;
       display: flex;
       align-items: center;
       border-top: 1px dashed #555;
       border-bottom: 1px dashed #555;
+      width: 100%;
     }
     .checkpoint-circle {
       width: 14px;
@@ -37,276 +112,450 @@
       position: absolute;
       top: 23px;
       z-index: 1;
+      border: 2px solid #111;
     }
-    #countdown { font-size: 2em; margin-top: 20px; }
-    #leaderboard { margin-top: 10px; font-size: 14px; display: none; }
-    #instructions { font-size: 14px; margin: 10px auto; width: 80%; line-height: 1.5; color: #ccc; }
-    select, button { margin: 10px; padding: 5px 10px; font-size: 16px; }
-  .finish-line {
+    .finish-line {
       position: absolute;
       top: 0;
-      left: 1000px;
+      left: var(--finish-line);
       width: 4px;
       height: 100%;
       background: #fff;
       z-index: 0;
     }
+    .shift-label {
+      position: absolute;
+      color: #0f0;
+      font-size: 13px;
+      z-index: 11;
+      left: 0px;
+      padding: 2px 5px;
+      pointer-events: none;
+      user-select: none;
+      border-radius: 4px;
+      min-width: 50px;
+      text-align: center;
+    }
+    .shift-label.perfect { color: #0f0; background: #222; }
+    .shift-label.okay { color: #ff0; background: #333; }
+    .shift-label.miss { color: #f55; background: #311; }
+    .feedback {
+      position: fixed;
+      left: 50%;
+      top: 30px;
+      transform: translateX(-50%);
+      background: #222;
+      color: #fff;
+      padding: 10px 28px;
+      border-radius: 8px;
+      z-index: 10000;
+      opacity: 0.97;
+      font-size: 1.3em;
+      box-shadow: 0 3px 18px #0009;
+      pointer-events: none;
+      animation: feedbackFade 1.1s cubic-bezier(0.4,0,0.2,1);
+    }
+    .feedback.success { background: #194; color: #fff; }
+    .feedback.miss { background: #a31; color: #fff; }
+    @keyframes feedbackFade {
+      0% { opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    @media (max-width: 700px) {
+      #gameArea { height: 180px; }
+      .track { height: 24px; }
+      .dot { width: 12px; height: 12px; }
+      .checkpoint-circle { width: 9px; height: 9px; top: 7px; }
+      #instructions { font-size: 13px; }
+    }
+    @media (max-width: 500px) {
+      #instructions { width: 99%; font-size: 12px;}
+      #leaderboard { font-size: 12px; padding: 7px; }
+      .shift-label { font-size: 11px; }
+    }
   </style>
 </head>
 <body>
+<main>
   <h1>Clutch Kings</h1>
-  <div id="instructions">
-    Press the <strong>spacebar</strong> to shift gears when your dot is centered on a checkpoint circle. Time your shifts well for a speed boost. Missing a shift gives a small slowdown, but you can still recover. First to the finish wins!
-  </div>
-  <div>
-    
+  <section id="instructions" aria-live="polite" tabindex="0">
+    Press the <strong>spacebar</strong> to shift gears when your dot is centered on a checkpoint circle.<br>
+    Time your shifts well for a speed boost. Missing a shift gives a slowdown, but you can recover.<br>
+    <u>New:</u> Press <kbd>P</kbd> to pause/resume. Press <kbd>R</kbd> to restart.<br>
+    The leaderboard tracks your best times and win streaks!
+  </section>
+  <form aria-label="Game controls" style="margin-bottom:0;">
     <label for="difficulty">Difficulty:</label>
-    <select id="difficulty">
+    <select id="difficulty" aria-label="Select game difficulty">
       <option value="very_easy">Very Easy</option>
       <option value="easy">Easy</option>
       <option value="medium" selected>Medium</option>
       <option value="hard">Hard</option>
       <option value="very_hard">Very Hard</option>
     </select>
-    <button id="startButton">Start Race</button>
-  </div>
-  <div id="countdown"></div>
-  <div id="gameArea"></div>
-  <div id="leaderboard"></div>
-<div id="fastestTimeDisplay" style="margin-top: 5px; font-size: 14px; color: #ccc;"></div>
-  <div id="streakDisplay" style="margin-top: 5px; font-size: 14px; color: #ccc;"></div>
+    <button type="button" id="startButton" aria-label="Start Race">Start Race</button>
+  </form>
+  <div id="countdown" aria-live="polite"></div>
+  <div id="gameArea" tabindex="0" aria-label="Game Area"></div>
+  <div id="leaderboard" aria-live="polite"></div>
+  <div id="fastestTimeDisplay"></div>
+  <div id="streakDisplay"></div>
+</main>
+<script defer>
+  // --- Constants & Globals ---
+  const TRACK_HEIGHT = 60;
+  const DOT_SIZE = 20;
+  const FINISH_LINE = 1000;
+  const TOTAL_CHECKPOINTS = 5;
+  const TOTAL_PLAYERS = 6;
+  const CPU_ACCURACY_BASE = [8, 9, 10, 11, 12, 13];
+  const colors = ["red", "blue", "green", "yellow", "orange", "purple"];
+  let winStreak = 0, bestTime = null, ghostDot = null, paused = false;
 
-  <script>
-    let colors = ["red", "blue", "green", "yellow", "orange", "purple"];
-    let winStreak = 0;
-    let bestTime = null;
-    let ghostDot = null;
-    let playerDots = [], speeds = [], intervals = [], shifts = [], checkpoints = [], leaderboard = [], cpuAccuracy = [], perfectStreak = [], shiftLabels = [];
-    let startTime, raceEnded = false;
-    let finishLine = 1000;
-    let difficultyMultiplier = 1;
-    const totalCheckpoints = 5;
-    const totalPlayers = 6;
+  // Game state
+  let playerDots = [],
+      speeds = [],
+      intervals = [],
+      shifts = [],
+      checkpoints = [],
+      leaderboard = [],
+      cpuAccuracy = [],
+      perfectStreak = [],
+      shiftLabels = [],
+      startTime, raceEnded = false,
+      difficultyMultiplier = 1,
+      pauseIntervals = [],
+      ghostInterval = null;
 
-    document.getElementById("startButton").addEventListener("click", startGame);
+  // --- Accessibility helper ---
+  function focusInstructions() {
+    const inst = document.getElementById('instructions');
+    inst.setAttribute('tabindex', '0');
+    inst.focus();
+  }
 
-    function setDifficulty() {
-      const diff = document.getElementById("difficulty").value;
-      if (diff === "very_easy") difficultyMultiplier = 0.6;
-      else if (diff === "easy") difficultyMultiplier = 0.8;
-      else if (diff === "medium") difficultyMultiplier = 1.0;
-      else if (diff === "hard") difficultyMultiplier = 1.2;
-      else difficultyMultiplier = 1.4;
+  // --- Difficulty ---
+  function setDifficulty() {
+    const diff = document.getElementById("difficulty").value;
+    if (diff === "very_easy") difficultyMultiplier = 0.6;
+    else if (diff === "easy") difficultyMultiplier = 0.8;
+    else if (diff === "medium") difficultyMultiplier = 1.0;
+    else if (diff === "hard") difficultyMultiplier = 1.2;
+    else difficultyMultiplier = 1.4;
+  }
+
+  // --- Checkpoints ---
+  function generateRandomCheckpoints() {
+    checkpoints = [];
+    let spacing = Math.floor((FINISH_LINE - 200) / TOTAL_CHECKPOINTS);
+    let last = 100;
+    for (let i = 0; i < TOTAL_CHECKPOINTS; i++) {
+      last += spacing;
+      checkpoints.push(last);
     }
-
-    function generateRandomCheckpoints() {
-      checkpoints = [];
-      let spacing = Math.floor((finishLine - 200) / totalCheckpoints);
-      let last = 100;
-      for (let i = 0; i < totalCheckpoints; i++) {
-        last += spacing;
-        checkpoints.push(last);
+  }
+  function drawCheckpointCircles() {
+    const gameArea = document.getElementById("gameArea");
+    checkpoints.forEach(pos => {
+      for (let i = 0; i < TOTAL_PLAYERS; i++) {
+        const circle = document.createElement("div");
+        circle.className = "checkpoint-circle";
+        circle.style.left = `${pos}px`;
+        circle.style.top = `${i * TRACK_HEIGHT + 23}px`;
+        circle.setAttribute("aria-label", `Checkpoint for player ${i+1}`);
+        gameArea.appendChild(circle);
       }
-    }
+    });
+  }
 
-    function drawCheckpointCircles() {
-      const gameArea = document.getElementById("gameArea");
-      checkpoints.forEach(pos => {
-        for (let i = 0; i < totalPlayers; i++) {
-          const circle = document.createElement("div");
-          circle.className = "checkpoint-circle";
-          circle.style.left = `${pos}px`;
-          circle.style.top = `${i * 60 + 23}px`;
-          gameArea.appendChild(circle);
+  // --- Game Start ---
+  function startGame() {
+    if (ghostDot) ghostDot.remove();
+    clearIntervalAll();
+    clearGhostInterval();
+    playerDots = []; speeds = []; intervals = []; shifts = []; cpuAccuracy = []; perfectStreak = []; shiftLabels = [];
+    for (let i = 0; i < TOTAL_PLAYERS; i++) {
+      speeds.push(1); shifts.push(0); perfectStreak.push(0);
+      cpuAccuracy.push(i === 0 ? CPU_ACCURACY_BASE[0] : CPU_ACCURACY_BASE[i] + Math.floor(Math.random() * 6));
+    }
+    raceEnded = false;
+    document.getElementById("leaderboard").style.display = "none";
+    generateRandomCheckpoints();
+    if (bestTime) createGhostDot();
+    setDifficulty();
+
+    // Game area setup
+    const gameArea = document.getElementById("gameArea");
+    gameArea.innerHTML = "";
+    gameArea.setAttribute('tabindex', '0');
+    gameArea.focus();
+    // Add finish line
+    const finishLineDiv = document.createElement("div");
+    finishLineDiv.className = "finish-line";
+    finishLineDiv.style.left = `${FINISH_LINE}px`;
+    gameArea.appendChild(finishLineDiv);
+
+    // Add tracks and dots
+    for (let i = 0; i < TOTAL_PLAYERS; i++) {
+      const track = document.createElement("div");
+      track.className = "track";
+      track.style.top = `${i * TRACK_HEIGHT}px`;
+      track.setAttribute("aria-label", `Track for player ${i+1}`);
+      gameArea.appendChild(track);
+      const dot = document.createElement("div");
+      dot.classList.add("dot", colors[i % colors.length]);
+      dot.style.top = `${i * TRACK_HEIGHT}px`;
+      dot.style.left = "0px";
+      dot.setAttribute("tabindex", "-1");
+      dot.setAttribute("aria-label", `Player ${i+1} token`);
+      dot.style.zIndex = 10;
+      gameArea.appendChild(dot);
+      playerDots.push(dot);
+      // Shift label
+      const label = document.createElement("div");
+      label.className = "shift-label";
+      label.style.top = `${i * TRACK_HEIGHT - 10}px`;
+      label.style.left = "0px";
+      label.textContent = "";
+      gameArea.appendChild(label);
+      shiftLabels.push(label);
+    }
+    drawCheckpointCircles();
+
+    // Countdown
+    let countdown = 3;
+    document.getElementById("countdown").textContent = countdown;
+    const countdownInterval = setInterval(() => {
+      if (paused) return;
+      countdown--;
+      if (countdown === 0) {
+        clearInterval(countdownInterval);
+        document.getElementById("countdown").textContent = "Go!";
+        setTimeout(() => document.getElementById("countdown").textContent = "", 600);
+        startRace();
+      } else {
+        document.getElementById("countdown").textContent = countdown;
+      }
+    }, 1000);
+  }
+
+  // --- Race Start ---
+  function startRace() {
+    startTime = Date.now();
+    raceEnded = false;
+    paused = false;
+    document.addEventListener("keydown", handleKeyPress, {capture: true});
+    for (let i = 0; i < TOTAL_PLAYERS; i++) {
+      intervals.push(setInterval(() => moveDot(i), 50));
+    }
+  }
+
+  // --- Key Handling: Space (shift), P (pause), R (restart) ---
+  let lastKeyPress = 0;
+  function handleKeyPress(e) {
+    if (raceEnded) return;
+    // Pause/Resume
+    if (e.key === 'p' || e.key === 'P') {
+      paused = !paused;
+      if (paused) {
+        pauseIntervals = intervals.map(clearInterval);
+        clearGhostInterval();
+        showFeedback('Paused', 'miss');
+      } else {
+        for (let i = 0; i < TOTAL_PLAYERS; i++) {
+          intervals[i] = setInterval(() => moveDot(i), 50);
         }
-      });
-    }
-
-    function startGame() {
-      if (ghostDot) ghostDot.remove();
-      clearIntervalAll();
-      playerDots = []; speeds = []; intervals = []; shifts = []; cpuAccuracy = [];
-      for (let i = 0; i < totalPlayers; i++) {
-        speeds.push(1); shifts.push(0); perfectStreak.push(0);
-        cpuAccuracy.push(i === 0 ? 8 : 9 + Math.floor(Math.random() * 6));
+        if (ghostDot && bestTime) createGhostDot();
+        showFeedback('Resumed', 'success');
       }
-      raceEnded = false;
-      document.getElementById("leaderboard").style.display = "none";
-      generateRandomCheckpoints();
-      if (bestTime) createGhostDot();
-      setDifficulty();
-
-      const gameArea = document.getElementById("gameArea");
-      gameArea.innerHTML = "";
-      const finishLineDiv = document.createElement("div");
-      finishLineDiv.className = "finish-line";
-      gameArea.appendChild(finishLineDiv);
-
-      for (let i = 0; i < totalPlayers; i++) {
-        const track = document.createElement("div");
-        track.className = "track";
-        gameArea.appendChild(track);
-        const dot = document.createElement("div");
-        dot.classList.add("dot", colors[i % colors.length]);
-        dot.style.top = `${i * 60}px`;
-        dot.style.left = "0px";
-        dot.style.zIndex = 10;
-        gameArea.appendChild(dot);
-        playerDots.push(dot);
-        const label = document.createElement("div");
-        label.style.position = "absolute";
-        label.style.top = `${i * 60 - 10}px`;
-        label.style.left = "0px";
-        label.style.color = "#0f0";
-        label.style.fontSize = "12px";
-        label.style.zIndex = 11;
-        gameArea.appendChild(label);
-        shiftLabels.push(label);
-      }
-
-      drawCheckpointCircles();
-
-      let countdown = 3;
-      document.getElementById("countdown").textContent = countdown;
-      const countdownInterval = setInterval(() => {
-        countdown--;
-        if (countdown === 0) {
-          clearInterval(countdownInterval);
-          document.getElementById("countdown").textContent = "Go!";
-          setTimeout(() => document.getElementById("countdown").textContent = "", 1000);
-          startRace();
-        } else {
-          document.getElementById("countdown").textContent = countdown;
-        }
-      }, 1000);
+      return;
     }
-
-    function startRace() {
-      startTime = Date.now();
-      document.addEventListener("keydown", handleKeyPress);
-      for (let i = 0; i < totalPlayers; i++) {
-        intervals.push(setInterval(() => moveDot(i), 50));
-      }
+    // Restart
+    if (e.key === 'r' || e.key === 'R') {
+      startGame();
+      return;
     }
-
-    function handleKeyPress(e) {
-      if (e.code === "Space") {
-        const i = 0;
-        const left = parseFloat(playerDots[i].style.left);
-        if (shifts[i] < totalCheckpoints) {
-          const dist = Math.abs(left - checkpoints[shifts[i]]);
-          if (dist < cpuAccuracy[i]) {
+    // Space = shift (debounced)
+    if ((e.code === "Space" || e.key === " ") && !paused && Date.now() - lastKeyPress > 180) {
+      lastKeyPress = Date.now();
+      const i = 0; // User = player 1
+      const left = parseFloat(playerDots[i].style.left || 0);
+      if (shifts[i] < TOTAL_CHECKPOINTS) {
+        const dist = Math.abs(left - checkpoints[shifts[i]]);
+        if (dist < cpuAccuracy[i]) {
           perfectStreak[i]++;
           speeds[i] += 1.5 * difficultyMultiplier + 0.1 * perfectStreak[i];
-            playerDots[i].style.filter = "blur(2px)";
-            flashDot(playerDots[i]);
-            playerDots[i].style.filter = "brightness(1.4)";
-            shiftLabels[i].textContent = "Perfect!";
-            setTimeout(() => shiftLabels[i].textContent = "", 500);
-            shiftLabels[i].textContent = "Okay";
-            setTimeout(() => shiftLabels[i].textContent = "", 300);
-            shifts[i]++;
-          } else if (dist < 2 * cpuAccuracy[i]) {
+          playerDots[i].style.filter = "blur(2px) brightness(1.4)";
+          flashDot(playerDots[i]);
+          shiftLabels[i].textContent = "Perfect!";
+          shiftLabels[i].className = "shift-label perfect";
+          setTimeout(() => shiftLabels[i].textContent = "", 650);
+          playSound('perfect');
+          shifts[i]++;
+        } else if (dist < 2 * cpuAccuracy[i]) {
           perfectStreak[i] = 0;
           speeds[i] += 0.5 * difficultyMultiplier;
-            playerDots[i].style.filter = "";
-            shifts[i]++;
-          } else {
+          playerDots[i].style.filter = "";
+          flashDot(playerDots[i], "#ff0");
+          shiftLabels[i].textContent = "Okay";
+          shiftLabels[i].className = "shift-label okay";
+          setTimeout(() => shiftLabels[i].textContent = "", 550);
+          playSound('okay');
+          shifts[i]++;
+        } else {
           perfectStreak[i] = 0;
           playerDots[i].style.filter = "";
-          shiftLabels[i].textContent = "";
-          }
+          shiftLabels[i].textContent = "Miss!";
+          shiftLabels[i].className = "shift-label miss";
+          setTimeout(() => shiftLabels[i].textContent = "", 700);
+          playSound('miss');
+          showFeedback('Missed! Try again.', 'miss');
         }
       }
     }
+  }
 
-    function moveDot(i) {
-      const dot = playerDots[i];
-      let left = parseFloat(dot.style.left || 0);
-      if (i !== 0 && shifts[i] < totalCheckpoints) {
-        const diff = Math.abs(left - checkpoints[shifts[i]]);
-        if (diff < cpuAccuracy[i]) {
-          speeds[i] += 1.5 * difficultyMultiplier;
-          flashDot(dot);
-          shifts[i]++;
-        }
-      }
-      left += speeds[i];
-      dot.style.left = `${left}px`;
-      if (left >= finishLine && !raceEnded) {
-        raceEnded = true;
-        clearIntervalAll();
-        const time = ((Date.now() - startTime) / 1000).toFixed(2);
-        const winner = colors[i % colors.length];
-        alert(`Player ${i + 1} (${winner}) wins in ${time}s!`);
-        updateLeaderboard(winner, time);
+  // --- Dot Movement ---
+  function moveDot(i) {
+    if (paused) return;
+    const dot = playerDots[i];
+    let left = parseFloat(dot.style.left || 0);
+    // CPU shifting for AI
+    if (i !== 0 && shifts[i] < TOTAL_CHECKPOINTS) {
+      const diff = Math.abs(left - checkpoints[shifts[i]]);
+      if (diff < cpuAccuracy[i]) {
+        speeds[i] += 1.5 * difficultyMultiplier;
+        flashDot(dot);
+        shifts[i]++;
       }
     }
-
-    function clearIntervalAll() {
-      intervals.forEach(clearInterval);
+    left += speeds[i];
+    dot.style.left = `${left}px`;
+    shiftLabels[i].style.left = `${left}px`;
+    if (left >= FINISH_LINE && !raceEnded) {
+      raceEnded = true;
+      clearIntervalAll();
+      clearGhostInterval();
+      document.removeEventListener("keydown", handleKeyPress, {capture: true});
+      const time = ((Date.now() - startTime) / 1000).toFixed(2);
+      const winner = colors[i % colors.length];
+      setTimeout(() => alert(`Player ${i + 1} (${winner}) wins in ${time}s!`), 50);
+      updateLeaderboard(winner, time);
     }
+  }
 
-    function updateLeaderboard(player, time) {
-      if (player === colors[0]) {
-        if (!bestTime || parseFloat(time) < bestTime) bestTime = parseFloat(time);
+  function clearIntervalAll() {
+    intervals.forEach(clearInterval);
+    intervals = [];
+  }
+  function clearGhostInterval() {
+    if (ghostInterval) { clearInterval(ghostInterval); ghostInterval = null; }
+    if (ghostDot) { ghostDot.style.left = '0px'; }
+  }
+
+  // --- Leaderboard, Streak, Best Time ---
+  function updateLeaderboard(player, time) {
+    if (player === colors[0]) {
+      if (!bestTime || parseFloat(time) < bestTime) {
+        bestTime = parseFloat(time);
+        saveBestTime(bestTime);
         document.getElementById("fastestTimeDisplay").textContent = `⏱ Fastest Time Ever: ${bestTime}s`;
       }
-      leaderboard.push({ player, time });
-      leaderboard.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+    }
+    leaderboard.push({ player, time });
+    leaderboard.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+    let output = '<strong>Race Results:</strong><br>';
+    leaderboard.slice(0, 6).forEach((entry, idx) => {
+      output += `${idx + 1}. ${entry.player} - ${entry.time}s<br>`;
+    });
+    output += '<br><strong>Perfect Shifts:</strong><br>';
+    for (let i = 0; i < TOTAL_PLAYERS; i++) {
+      output += `Player ${i + 1} (${colors[i % colors.length]}): ${shifts[i]} / ${TOTAL_CHECKPOINTS}<br>`;
+    }
+    if (player === colors[0]) {
+      winStreak++;
+    } else {
+      winStreak = 0;
+    }
+    const lb = document.getElementById("leaderboard");
+    lb.innerHTML = output;
+    lb.style.display = "block";
+    document.getElementById("streakDisplay").textContent = `🏆 Win Streak: ${winStreak}`;
+  }
 
-      let output = '<strong>Race Results:</strong><br>';
-      leaderboard.slice(0, 6).forEach((entry, idx) => {
-        output += `${idx + 1}. ${entry.player} - ${entry.time}s<br>`;
-      });
-
-      output += '<br><strong>Perfect Shifts:</strong><br>';
-      for (let i = 0; i < totalPlayers; i++) {
-        output += `Player ${i + 1} (${colors[i % colors.length]}): ${shifts[i]} / ${totalCheckpoints}<br>`;
-      }
-
-      if (player === colors[0]) {
-        winStreak++;
+  // --- Ghost Dot (Best Time Tracker) ---
+  function createGhostDot() {
+    if (!bestTime) return;
+    if (ghostDot) ghostDot.remove();
+    const ghost = document.createElement("div");
+    ghost.className = "dot";
+    ghost.style.background = "rgba(255,255,255,0.4)";
+    ghost.style.top = "0px";
+    ghost.style.left = "0px";
+    ghost.style.zIndex = 1;
+    ghost.setAttribute("aria-label", "Ghost Dot (best time)");
+    document.getElementById("gameArea").appendChild(ghost);
+    ghostDot = ghost;
+    const totalDuration = bestTime * 1000;
+    const start = Date.now();
+    ghostInterval = setInterval(() => {
+      if (paused) return;
+      const now = Date.now();
+      const progress = (now - start) / totalDuration;
+      if (progress >= 1) {
+        ghost.style.left = `${FINISH_LINE}px`;
+        clearGhostInterval();
       } else {
-        winStreak = 0;
+        ghost.style.left = `${progress * FINISH_LINE}px`;
       }
+    }, 16);
+  }
 
-      const lb = document.getElementById("leaderboard");
-      lb.innerHTML = output;
-      lb.style.display = "block";
-      document.getElementById("streakDisplay").textContent = `🏆 Win Streak: ${winStreak}`;
-    }
+  // --- UI Feedback, Sound ---
+  function showFeedback(message, type) {
+    const feedback = document.createElement('div');
+    feedback.textContent = message;
+    feedback.className = `feedback ${type}`;
+    document.body.appendChild(feedback);
+    setTimeout(() => feedback.remove(), 1100);
+  }
+  function flashDot(dot, color = "#fff") {
+    dot.style.boxShadow = `0 0 20px 5px ${color}`;
+    setTimeout(() => dot.style.boxShadow = "none", 150);
+  }
+  function playSound(type) {
+    // Uncomment and provide valid mp3 files to use sound effects
+    // let src = '';
+    // if (type === 'perfect') src = 'perfect.mp3';
+    // else if (type === 'miss') src = 'miss.mp3';
+    // else src = 'okay.mp3';
+    // if (src) {
+    //   const audio = new Audio(src);
+    //   audio.volume = 0.15;
+    //   audio.play();
+    // }
+  }
 
-    function createGhostDot() {
-      const ghost = document.createElement("div");
-      ghost.className = "dot";
-      ghost.style.background = "rgba(255,255,255,0.4)";
-      ghost.style.top = "0px";
-      ghost.style.left = "0px";
-      ghost.style.zIndex = 1;
-      document.getElementById("gameArea").appendChild(ghost);
-      ghostDot = ghost;
+  // --- Save/Load Best Time ---
+  function saveBestTime(time) {
+    try { localStorage.setItem('clutchKingsBestTime', time); } catch (e) {}
+  }
+  function loadBestTime() {
+    try {
+      const t = localStorage.getItem('clutchKingsBestTime');
+      if (t) bestTime = parseFloat(t);
+      if (bestTime) document.getElementById("fastestTimeDisplay").textContent = `⏱ Fastest Time Ever: ${bestTime}s`;
+    } catch (e) {}
+  }
 
-      const totalDuration = bestTime * 1000;
-      const start = Date.now();
-      const ghostInterval = setInterval(() => {
-        const now = Date.now();
-        const progress = (now - start) / totalDuration;
-        if (progress >= 1) {
-          ghost.style.left = `${finishLine}px`;
-          clearInterval(ghostInterval);
-        } else {
-          ghost.style.left = `${progress * finishLine}px`;
-        }
-      }, 16);
-    }
-
-    function flashDot(dot) {
-      dot.style.boxShadow = "0 0 20px 5px white";
-      setTimeout(() => {
-        dot.style.boxShadow = "none";
-      }, 150);
-    }
-  </script>
+  // --- Event Listeners ---
+  document.getElementById("startButton").addEventListener("click", startGame);
+  window.addEventListener("DOMContentLoaded", () => {
+    focusInstructions();
+    loadBestTime();
+  });
+</script>
 </body>
 </html>
