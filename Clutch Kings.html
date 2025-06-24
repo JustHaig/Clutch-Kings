@@ -187,14 +187,6 @@
     The leaderboard tracks your best times and win streaks!
   </section>
   <form aria-label="Game controls" style="margin-bottom:0;">
-    <label for="difficulty">Difficulty:</label>
-    <select id="difficulty" aria-label="Select game difficulty">
-      <option value="very_easy">Very Easy</option>
-      <option value="easy">Easy</option>
-      <option value="medium" selected>Medium</option>
-      <option value="hard">Hard</option>
-      <option value="very_hard">Very Hard</option>
-    </select>
     <label for="cpuCount">Computer players:</label>
     <select id="cpuCount" aria-label="How many computer players">
       <option value="1" selected>1</option>
@@ -203,6 +195,7 @@
       <option value="4">4</option>
       <option value="5">5</option>
     </select>
+    <span id="cpuDifficultySelectors"></span>
     <button type="button" id="startButton" aria-label="Start Race">Start Race</button>
   </form>
   <div id="countdown" aria-live="polite"></div>
@@ -233,9 +226,19 @@
       perfectStreak = [],
       shiftLabels = [],
       startTime, raceEnded = false,
-      difficultyMultiplier = 1,
+      cpuDifficulties = [],
+      cpuDifficultyMultipliers = [],
       pauseIntervals = [],
       ghostInterval = null;
+
+  // --- CPU Difficulty Levels ---
+  const cpuDifficultyLevels = [
+    { value: "very_easy", label: "Very Easy", multiplier: 0.6 },
+    { value: "easy", label: "Easy", multiplier: 0.8 },
+    { value: "medium", label: "Medium", multiplier: 1.0 },
+    { value: "hard", label: "Hard", multiplier: 1.2 },
+    { value: "very_hard", label: "Very Hard", multiplier: 1.4 },
+  ];
 
   // --- Accessibility helper ---
   function focusInstructions() {
@@ -244,15 +247,33 @@
     inst.focus();
   }
 
-  // --- Difficulty ---
-  function setDifficulty() {
-    const diff = document.getElementById("difficulty").value;
-    if (diff === "very_easy") difficultyMultiplier = 0.6;
-    else if (diff === "easy") difficultyMultiplier = 0.8;
-    else if (diff === "medium") difficultyMultiplier = 1.0;
-    else if (diff === "hard") difficultyMultiplier = 1.2;
-    else difficultyMultiplier = 1.4;
+  // --- Render CPU difficulty selectors ---
+  function renderCpuDifficultySelectors() {
+    const cpuCount = parseInt(document.getElementById("cpuCount").value, 10);
+    const container = document.getElementById("cpuDifficultySelectors");
+    container.innerHTML = "";
+    cpuDifficulties = [];
+    cpuDifficultyMultipliers = [];
+    for (let i = 0; i < cpuCount; i++) {
+      const select = document.createElement("select");
+      select.id = `cpuDiff${i}`;
+      select.setAttribute("aria-label", `Difficulty for CPU #${i+1}`);
+      select.style.marginLeft = "4px";
+      cpuDifficultyLevels.forEach(opt => {
+        const option = document.createElement("option");
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === "medium") option.selected = true;
+        select.appendChild(option);
+      });
+      container.appendChild(document.createTextNode(` CPU #${i+1}: `));
+      container.appendChild(select);
+      cpuDifficulties.push(select);
+      cpuDifficultyMultipliers.push(1.0); // default, set later in startGame
+    }
   }
+  document.getElementById("cpuCount").addEventListener("change", renderCpuDifficultySelectors);
+  renderCpuDifficultySelectors();
 
   // --- Checkpoints ---
   function generateRandomCheckpoints() {
@@ -284,6 +305,14 @@
     const cpuCount = parseInt(document.getElementById("cpuCount").value, 10);
     TOTAL_PLAYERS = 1 + cpuCount; // 1 human + N CPUs
 
+    // Setup per-CPU difficulty multipliers
+    cpuDifficultyMultipliers = [1.0]; // player 0 (human) always 1.0
+    for (let i = 0; i < cpuCount; i++) {
+      const cpuDiffValue = cpuDifficulties[i].value;
+      const cpuDiff = cpuDifficultyLevels.find(d => d.value === cpuDiffValue);
+      cpuDifficultyMultipliers.push(cpuDiff ? cpuDiff.multiplier : 1.0);
+    }
+
     if (ghostDot) ghostDot.remove();
     clearIntervalAll();
     clearGhostInterval();
@@ -297,7 +326,6 @@
     document.getElementById("leaderboard").style.display = "none";
     generateRandomCheckpoints();
     if (bestTime) createGhostDot();
-    setDifficulty();
 
     // Game area setup
     const gameArea = document.getElementById("gameArea");
@@ -407,7 +435,7 @@
         const dist = Math.abs(left - checkpoints[shifts[i]]);
         if (dist < cpuAccuracy[i]) {
           perfectStreak[i]++;
-          speeds[i] += 1.5 * difficultyMultiplier + 0.1 * perfectStreak[i];
+          speeds[i] += 1.5 * cpuDifficultyMultipliers[0] + 0.1 * perfectStreak[i];
           playerDots[i].style.filter = "blur(2px) brightness(1.4)";
           flashDot(playerDots[i]);
           shiftLabels[i].textContent = "Perfect!";
@@ -417,7 +445,7 @@
           shifts[i]++;
         } else if (dist < 2 * cpuAccuracy[i]) {
           perfectStreak[i] = 0;
-          speeds[i] += 0.5 * difficultyMultiplier;
+          speeds[i] += 0.5 * cpuDifficultyMultipliers[0];
           playerDots[i].style.filter = "";
           flashDot(playerDots[i], "#ff0");
           shiftLabels[i].textContent = "Okay";
@@ -447,7 +475,7 @@
     if (i !== 0 && shifts[i] < TOTAL_CHECKPOINTS) {
       const diff = Math.abs(left - checkpoints[shifts[i]]);
       if (diff < cpuAccuracy[i]) {
-        speeds[i] += 1.5 * difficultyMultiplier;
+        speeds[i] += 1.5 * cpuDifficultyMultipliers[i];
         flashDot(dot);
         shifts[i]++;
       }
